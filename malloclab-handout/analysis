@@ -1,0 +1,10 @@
+ref_mm.c that uses implicit free list,
+we need to applying tricks from 9.9.13&9.9.14,which are:
+1.use explicit free list,we need to store pred and succ in effective load.
+2.free list are segeregated into different groups base on it's size:
+each time we call place(),it needs to cut the block if possible ,and add it to the free list grouped by size.
+each time we call extend_heap(),free(),add it to free list.
+find_fit() search the free list based on its size.
+
+programming rules don't allow us to use array to store the free list,
+and I find it hard to get a solution without using array.

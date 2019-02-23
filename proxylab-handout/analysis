@@ -1,0 +1,10 @@
+Part B:
+there are many ways to implement a concurrent server.
+I have written two types of them,the first one is a
+concurrent event-driven server and the second one is a prethreaded
+server.
+event-driven server:
+combine tiny.c and echoservers.c from book.
+we also need a sig handler that allow dynamic process run in BG.
+prethread:
+only need to change a function from echoervert_pre.c 

@@ -1,0 +1,142 @@
+sudo apt-get install tcl
+sudo apt-get install tcl8.5-dev tk8.5-dev
+change MAKEFILE:
+TKLIBS=-L/usr/lib -ltk8.5 -ltcl8.5
+
+comment out "matherr" in *.c file,
+it will cause error when you use make;make clean
+
+YAS:
+to assemble the program in file asum.ys 
+cd ./archlab-handout/sim/y86-code
+linux> make asum.yo
+
+YIS:
+cd ./archlab-handout/sim/y86-code
+linux> ../misc/yis asum.yo
+
+SSIM:
+cd ./archlab-handout/sim/y86-code
+linux> ../seq/ssim -t < asum.yo
+
+PartA:
+gcc -Og -S examples.c //get your examples.s and use it to write your Y86-64 code
+the code should be like this:
+------------------------------------
+.pos 0 // code start from 0
+irmovq stack,%rsp //stack starts from 0x200
+call main
+halt
+.align 8
+ele1:
+.quad 0x00a
+.quad ele2
+ele2:
+.quad 0x0b0
+.quad ele3
+ele3:
+.quad 0xc00
+.quad 0
+main:
+	irmovq ele1,%rdi
+	call function
+	ret
+...
+.pos 0x200
+stack:
+
+------------------------------------
+test sum.ys in ./archlab-handout/sim/y86-code
+%rax:	0x0000000000000000	0x0000000000000cba
+it works.
+rsum and copy are similar.
+
+PartB:
+iaddq V,rB
+f:
+icode:ifun<-M1[PC]
+rA:rB<-M1[PC+1]
+valC<-M8[PC+2]
+valP<-PC+10
+d:
+valB<-R[rB]
+e:
+valE<-valC+valB
+w:
+R[rB]<-valE
+update PC:
+PC<-valP
+modify seq-full.hcl
+make clean;make VERSION=full
+
+PartC:
+I think by applying homework 4.56 and 4.57 psim will be good enough.
+(I've found a version onlion that only implemented iaddq in./labdata)
+
+add "wordsig IIADDQ	'I_IADDQ'" to pipe-btfnt.hcl and finish 4.56.
+in pipe-btfnt.hcl ,notice:
+boolsig e_Cnd 'ex_mem_next->takebranch' # Does condition hold?
+boolsig M_Cnd 'ex_mem_curr->takebranch'	# Condition flag
+4.57 is a load/use problem,
+load/use happens when 
+E_icode in { IMRMOVQ, IPOPQ } && E_dstM in { d_srcA, d_srcB };
+and the situation could be:
+
+situation	        1	2	3	4
+E_dstM == d_srcA	1	1	0	0
+E_dstM == d_srcB	1	0	1	0
+
+situation 4:
+normal, no hazard happens
+situation 1,2,3:
+load/use hazard happens
+
+if E_icode in { IMRMOVQ, IPOPQ }, then E_dstM must not be RNONE
+consider situation 1 and 3, E_dstM == d_srcB, then d_srcB is not RNONE,check out all the instrctions ,when d_srcB is not RNONE,
+it must be used in phase E, therefore you can't use load forwarding.
+so only situation 2 is okay.
+consider all the instructions that d_srcA is not RNONE:
+
+OPq
+rrmovq
+rmmovq
+pushq
+popq
+ret
+
+popq and ret are not okay because d_srcA==d_srcB==%rsp,that is not in situation2,now we only have:
+
+OPq
+rrmovq
+rmmovq
+pushq
+
+OPq and rrmovq,d_srcA is used in phase E,so they are not okay.
+so the right sequence that you could apply laod forwarding is 
+(mrmovq, popq)x(rmmovq,pushq)
+
+the final code is in pipe-final.hcl,test it.(should do it in ./pipe)
+We still need to modify ncopy.ys to finish the lab.I didn't write it based on
+my poor understanding of Chapter 5.
+There's a ncopy.ys file in ./pipe (I got it from github) so you could test:
+
+make VERSION=final
+cd ../y86-code; make testpsim
+cd ../ptest; make SIM=../pipe/psim
+cd ../ptest; make SIM=../pipe/psim TFLAGS=-i
+modify ncopy.ys and test it:
+../misc/yas ncopy.ys
+./make drivers
+./benchmark.pl
+
+test result:
+Average CPE	7.82
+Score	53.6/60.0
+
+compare with pipe-full.hcl in ./labdata
+Average CPE	7.95
+Score	51.0/60.0
+
+
+
+

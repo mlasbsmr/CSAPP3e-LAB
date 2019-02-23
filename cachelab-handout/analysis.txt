@@ -1,0 +1,14 @@
+Part A:
+I use a stack to simulate LRU, it will update the latest item on top of the stack,and delete item from the bottom of stack if you need to evict.
+cache is an array:
+mycache[S] ,each element contains a stack representing the line of  one specific set,if E==1 then there is only one line.
+cache looks like this:(S==3,E==4)
+- - - -
+- - - -
+- - - -
+load and store share the same function,assuming we only do all the work on cache,and change them only if we have to do(like the data you need to store
+has to be evicted at the time)
+modify means load a data and store it,so when we store it ,it will always be 
+"hit".
+I don't konw why I can't test it on test-csim,
+so I have to test it manually,and it works fine.(check ref.txt),

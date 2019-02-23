@@ -1,0 +1,12 @@
+look at the description and hints of shlab.pdf
+An important rule from book:
+G3. Protect accesses to shared global data structures by blocking all signals. If
+a handler shares a global data structure with the main program or with
+other handlers, then your handlers and main program should temporarily
+block all signals while accessing (reading or writing) that data structure.
+The reason for this rule is that accessing a data structure d from the main
+program typically requires a sequence of instructions. If this instruction
+sequence is interrupted by a handler that accesses d, then the handler
+might find d in an inconsistent state, with unpredictable results. Temporarily
+blocking signals while you access d guarantees that a handler will
+not interrupt the instruction sequence.
